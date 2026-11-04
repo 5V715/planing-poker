@@ -4,7 +4,7 @@ A tiny, serverless planning poker app that runs on GitHub Pages.
 
 1. Enter your name and click **Create new session** — you get a session token like `K7QM3XPA`.
 2. Click **Copy invite link** and send it to your team (or share the token; others can paste it under *Have a session token?*).
-3. Everyone picks a card. Votes stay hidden until someone clicks **Reveal cards**.
+3. Everyone picks a card (Fibonacci or T-shirt sizes — switch the deck in the room; it changes for everyone). Votes stay hidden until someone clicks **Reveal cards**.
 4. See the average, the spread, and whether you hit consensus. Click **New round** to go again.
 
 ## How it works

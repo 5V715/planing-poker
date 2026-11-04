@@ -4,7 +4,11 @@
 // host leaves, the remaining players race to claim the ID and the room carries on.
 
 (() => {
-  const DECK = ["0", "½", "1", "2", "3", "5", "8", "13", "21", "40", "100", "?", "☕"];
+  const DECKS = {
+    fib: { label: "Fibonacci", cards: ["0", "½", "1", "2", "3", "5", "8", "13", "21", "40", "100", "?", "☕"] },
+    tshirt: { label: "T-shirt", cards: ["XS", "S", "M", "L", "XL", "XXL", "?", "☕"] },
+  };
+  const cardsOf = (deck) => (DECKS[deck] || DECKS.fib).cards;
   const ID_PREFIX = "planning-poker-v1-";
   const TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
 
@@ -52,7 +56,7 @@
   let view = null;
 
   function freshState() {
-    return { topic: "", revealed: false, players: {} };
+    return { topic: "", deck: "fib", revealed: false, players: {} };
   }
 
   function newToken() {
@@ -168,6 +172,7 @@
     state = freshState();
     if (prev) {
       state.topic = prev.topic || "";
+      state.deck = DECKS[prev.deck] ? prev.deck : "fib";
       state.revealed = !!prev.revealed;
     }
     state.players[clientId] = { name: myName, vote: myVote };
@@ -225,15 +230,20 @@
     if (msg.type === "join" && conn) {
       const pid = String(msg.id || conn.peer).slice(0, 32);
       conns.set(conn, pid);
-      const vote = DECK.includes(msg.vote) ? msg.vote : null;
+      const vote = cardsOf(state.deck).includes(msg.vote) ? msg.vote : null;
       state.players[pid] = { name: cleanName(msg.name), vote };
     } else if (!id || !state.players[id]) {
       return;
     } else if (msg.type === "vote") {
-      if (msg.value === null || DECK.includes(msg.value)) state.players[id].vote = msg.value;
+      if (msg.value === null || cardsOf(state.deck).includes(msg.value)) state.players[id].vote = msg.value;
     } else if (msg.type === "reveal") {
       state.revealed = true;
     } else if (msg.type === "reset") {
+      state.revealed = false;
+      for (const p of Object.values(state.players)) p.vote = null;
+    } else if (msg.type === "deck") {
+      if (!DECKS[msg.deck] || msg.deck === state.deck) return;
+      state.deck = msg.deck;
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "topic") {
@@ -251,7 +261,7 @@
       const vote = state.revealed || id === pid ? p.vote : p.vote === null ? null : true;
       players[id] = { name: p.name, vote };
     }
-    return { topic: state.topic, revealed: state.revealed, players };
+    return { topic: state.topic, deck: state.deck, revealed: state.revealed, players };
   }
 
   function broadcast() {
@@ -331,7 +341,8 @@
     // Deck
     const deck = $("deck");
     deck.innerHTML = "";
-    for (const value of DECK) {
+    $("deck-select").value = view.deck || "fib";
+    for (const value of cardsOf(view.deck)) {
       const b = document.createElement("button");
       b.textContent = value;
       b.disabled = view.revealed;
@@ -360,10 +371,21 @@
       const consensus = Object.keys(counts).length === 1;
 
       const avg = document.createElement("div");
-      avg.innerHTML = `<div class="small muted">Average</div><div class="big"></div>`;
-      avg.querySelector(".big").textContent = nums.length
-        ? (Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10).toString()
-        : "–";
+      avg.innerHTML = `<div class="small muted"></div><div class="big"></div>`;
+      if (view.deck === "tshirt") {
+        // Most voted size(s); "?" and "☕" don't count.
+        const sized = Object.entries(counts).filter(([v]) => v !== "?" && v !== "☕");
+        const top = Math.max(0, ...sized.map(([, c]) => c));
+        avg.firstChild.textContent = "Most votes";
+        avg.lastChild.textContent = top
+          ? sized.filter(([, c]) => c === top).map(([v]) => v).join(" / ")
+          : "–";
+      } else {
+        avg.firstChild.textContent = "Average";
+        avg.lastChild.textContent = nums.length
+          ? (Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10).toString()
+          : "–";
+      }
       const dist = document.createElement("div");
       dist.className = "dist";
       dist.textContent = Object.entries(counts)
@@ -387,7 +409,7 @@
     $("room").hidden = false;
     $("room-token").textContent = token;
     document.title = `Planning Poker · ${token}`;
-    view = { topic: "", revealed: false, players: { [clientId]: { name: myName, vote: null } } };
+    view = { topic: "", deck: "fib", revealed: false, players: { [clientId]: { name: myName, vote: null } } };
     render();
     connect();
   }
@@ -446,6 +468,11 @@
     send({ type: "reset" });
     render();
   };
+  $("deck-select").addEventListener("change", (e) => {
+    myVote = null;
+    send({ type: "deck", deck: e.target.value });
+    render();
+  });
   let topicTimer;
   $("topic").addEventListener("input", (e) => {
     clearTimeout(topicTimer);

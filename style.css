@@ -119,3 +119,10 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px;
   max-width: calc(100% - 32px);
 }
+
+.deck-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 8px; }
+.deck-head h2 { margin: 0; }
+select {
+  font: inherit; font-size: 14px; color: inherit; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+}

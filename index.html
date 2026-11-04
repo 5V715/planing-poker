@@ -59,7 +59,13 @@
         <button id="reset" class="secondary">New round</button>
       </div>
 
-      <h2 class="small muted">Pick a card</h2>
+      <div class="deck-head">
+        <h2 class="small muted">Pick a card</h2>
+        <select id="deck-select" aria-label="Card deck">
+          <option value="fib">Fibonacci</option>
+          <option value="tshirt">T-shirt sizes</option>
+        </select>
+      </div>
       <div id="deck" class="deck"></div>
     </section>
   </main>

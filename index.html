@@ -48,7 +48,9 @@
         <button id="invite" class="secondary">Copy invite link</button>
       </div>
 
-      <input id="topic" class="topic" maxlength="140" placeholder="What are we estimating? (optional)">
+      <input id="topic" class="topic" maxlength="300" enterkeyhint="done"
+        placeholder="What are we estimating? Paste a ticket link…">
+      <div id="topic-view" class="topic topic-view" role="button" tabindex="0" title="Tap to edit" hidden></div>
 
       <ul id="players" class="players"></ul>
 

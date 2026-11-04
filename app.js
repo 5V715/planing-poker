@@ -313,12 +313,12 @@
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "revote") {
       // Start a fresh round for a topic from the history.
-      state.topic = String(msg.topic || "").slice(0, 140);
+      state.topic = String(msg.topic || "").slice(0, 300);
       if (DECKS[msg.deck]) state.deck = msg.deck;
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "topic") {
-      state.topic = String(msg.topic || "").slice(0, 140);
+      state.topic = String(msg.topic || "").slice(0, 300);
       // Naming the round right after revealing it? Keep the history entry in sync.
       if (state.revealed && state.history[0]) state.history[0].topic = state.topic;
     } else {
@@ -391,7 +391,14 @@
 
     // Topic (don't clobber while typing).
     const topicEl = $("topic");
-    if (document.activeElement !== topicEl) topicEl.value = view.topic || "";
+    if (document.activeElement !== topicEl) {
+      topicEl.value = view.topic || "";
+      // Show the topic with clickable links unless someone is editing it.
+      const tv = $("topic-view");
+      tv.replaceChildren(linkify(view.topic || ""));
+      tv.hidden = !view.topic;
+      topicEl.hidden = !!view.topic;
+    }
 
     // Players
     const list = $("players");
@@ -482,6 +489,46 @@
     renderHistory();
   }
 
+  // Text -> fragment with http(s) links turned into <a>. Ticket URLs get short labels.
+  const URL_RE = /https?:\/\/[^\s<>"']+/g;
+
+  function linkLabel(href) {
+    try {
+      const u = new URL(href);
+      const parts = u.pathname.split("/").filter(Boolean);
+      const jira = u.pathname.match(/\/browse\/([A-Z][A-Z0-9_]+-\d+)/i) ||
+        (u.searchParams.get("selectedIssue") || "").match(/^([A-Z][A-Z0-9_]+-\d+)$/i);
+      if (jira) return jira[1].toUpperCase();
+      const gh = u.pathname.match(/^\/[^/]+\/([^/]+)\/(?:issues|pull)\/(\d+)/);
+      if (gh && /github|gitlab/.test(u.hostname)) return `${gh[1]}#${gh[2]}`;
+      const last = parts[parts.length - 1];
+      return u.hostname.replace(/^www\./, "") + (last ? ` › ${decodeURIComponent(last)}` : "");
+    } catch {
+      return href;
+    }
+  }
+
+  function linkify(text) {
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(URL_RE)) {
+      // Leave trailing punctuation out of the link.
+      const href = m[0].replace(/[.,;:!?)\]]+$/, "");
+      frag.append(text.slice(last, m.index));
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "🔗 " + linkLabel(href);
+      a.title = href;
+      a.addEventListener("click", (e) => e.stopPropagation());
+      frag.append(a);
+      last = m.index + href.length;
+    }
+    frag.append(text.slice(last));
+    return frag;
+  }
+
   function fmtTime(ts) {
     const d = new Date(ts);
     const sameDay = d.toDateString() === new Date().toDateString();
@@ -508,7 +555,7 @@
       const summary = document.createElement("summary");
       const title = document.createElement("span");
       title.className = "h-topic";
-      title.textContent = r.topic || "Untitled round";
+      title.replaceChildren(r.topic ? linkify(r.topic) : "Untitled round");
       const result = document.createElement("span");
       result.className = "h-result";
       result.textContent = (sum.consensus ? "🎉 " : "") + sum.value;
@@ -618,9 +665,38 @@
     render();
   });
   let topicTimer;
-  $("topic").addEventListener("input", (e) => {
+  const saveTopic = () => {
     clearTimeout(topicTimer);
-    topicTimer = setTimeout(() => send({ type: "topic", topic: e.target.value }), 300);
+    if ($("topic").value !== (view && view.topic)) send({ type: "topic", topic: $("topic").value });
+  };
+  $("topic").addEventListener("input", () => {
+    clearTimeout(topicTimer);
+    topicTimer = setTimeout(saveTopic, 300);
+  });
+  // Return saves the topic right away and closes the keyboard.
+  $("topic").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      $("topic").blur();
+    }
+  });
+  $("topic").addEventListener("blur", () => {
+    saveTopic();
+    if (view) view.topic = $("topic").value;
+    render();
+  });
+  // Tap the topic (not a link) to edit it.
+  const editTopic = () => {
+    $("topic-view").hidden = true;
+    $("topic").hidden = false;
+    $("topic").focus();
+  };
+  $("topic-view").addEventListener("click", editTopic);
+  $("topic-view").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      editTopic();
+    }
   });
 
   $("history-copy").onclick = async () => {

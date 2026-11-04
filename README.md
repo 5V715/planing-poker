@@ -6,7 +6,8 @@ A tiny, serverless planning poker app that runs on GitHub Pages.
 2. Click **Copy invite link** and send it to your team (or share the token; others can paste it under *Have a session token?*).
 3. Everyone picks a card (Fibonacci or T-shirt sizes — switch the deck in the room; it changes for everyone). Votes stay hidden until someone clicks **Reveal cards**.
 4. See the average, the spread, and whether you hit consensus. Click **New round** to go again.
-5. Every revealed round is kept in **History** (saved in your browser per session). Tap a round to see who voted what, **Vote again** to re-estimate it, or **Copy as text** to paste the results elsewhere.
+5. Paste a ticket link into the topic (press Return to save) — Jira and GitHub links get short labels like `SHOP-142` and are clickable.
+6. Every revealed round is kept in **History** (saved in your browser per session). Tap a round to see who voted what, **Vote again** to re-estimate it, or **Copy as text** to paste the results elsewhere.
 
 ## How it works
 

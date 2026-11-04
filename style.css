@@ -175,3 +175,13 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .player .slot, .player .pname { animation: none !important; }
 }
+
+/* Topic with clickable links (shown when not editing) */
+.topic-view {
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: text;
+  min-height: 48px; overflow-wrap: anywhere;
+}
+.topic-view:hover { border-color: var(--accent); }
+a { color: var(--accent); }
+.topic-view a, .history a { font-weight: 600; text-decoration: none; }
+.topic-view a:hover, .history a:hover { text-decoration: underline; }

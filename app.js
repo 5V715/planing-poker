@@ -55,6 +55,11 @@
   // What this browser renders (votes masked until reveal).
   let view = null;
 
+  // Per-player animation bookkeeping (last rendered state + running animation).
+  const seen = new Map();
+  const anims = new Map();
+  const ANIM_MS = 700;
+
   function freshState() {
     return { topic: "", deck: "fib", revealed: false, players: {}, history: [] };
   }
@@ -283,7 +288,9 @@
     } else if (!id || !state.players[id]) {
       return;
     } else if (msg.type === "vote") {
-      if (msg.value === null || cardsOf(state.deck).includes(msg.value)) state.players[id].vote = msg.value;
+      if (msg.value !== null && !cardsOf(state.deck).includes(msg.value)) return;
+      state.players[id].vote = msg.value;
+      state.players[id].n = (state.players[id].n || 0) + 1;
     } else if (msg.type === "reveal") {
       if (state.revealed) return;
       state.revealed = true;
@@ -325,7 +332,7 @@
     const players = {};
     for (const [id, p] of Object.entries(state.players)) {
       const vote = state.revealed || id === pid ? p.vote : p.vote === null ? null : true;
-      players[id] = { name: p.name, vote };
+      players[id] = { name: p.name, vote, n: p.n || 0 };
     }
     return { topic: state.topic, deck: state.deck, revealed: state.revealed, players, history: state.history };
   }
@@ -389,11 +396,33 @@
     // Players
     const list = $("players");
     list.innerHTML = "";
+    const now = Date.now();
+    let flipIndex = 0;
     for (const [id, p] of players) {
       const li = document.createElement("li");
       const voted = p.vote !== null;
       li.className = "player" + (id === clientId ? " me" : "") +
         (voted ? (view.revealed ? " shown" : " voted") : "");
+
+      // Animate what changed since the last render.
+      const before = seen.get(id);
+      if (before) {
+        let anim = null;
+        if (!before.revealed && view.revealed && voted) anim = "anim-flip";
+        else if (!view.revealed && !before.voted && voted) anim = "anim-in";
+        else if (!view.revealed && before.voted && voted && p.n !== before.n) anim = "anim-change";
+        else if (!view.revealed && before.voted && !voted) anim = "anim-out";
+        // Revealed cards flip one after another.
+        if (anim) anims.set(id, { cls: anim, at: anim === "anim-flip" ? now + 90 * flipIndex++ : now });
+      }
+      seen.set(id, { voted, n: p.n, revealed: view.revealed });
+      // Re-renders rebuild the DOM, so resume a running animation where it was.
+      const a = anims.get(id);
+      if (a && now - a.at < ANIM_MS) {
+        li.classList.add(a.cls);
+        li.style.setProperty("--anim-delay", `${a.at - now}ms`);
+      }
+
       const slot = document.createElement("div");
       slot.className = "slot";
       slot.textContent = view.revealed && voted ? p.vote : "";

@@ -141,3 +141,37 @@ select {
 .h-meta { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .h-votes { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
 .h-votes b { display: inline-block; min-width: 1.6em; }
+
+/* Vote animations */
+.player .slot { animation-delay: var(--anim-delay, 0ms); animation-fill-mode: both; }
+.player.anim-in .slot { animation: card-in .45s cubic-bezier(.2,1.4,.4,1) var(--anim-delay, 0ms) both; }
+.player.anim-change .slot { animation: card-change .5s ease-in-out var(--anim-delay, 0ms) both; }
+.player.anim-out .slot { animation: card-out .35s ease-out var(--anim-delay, 0ms) both; }
+.player.anim-flip .slot { animation: card-flip .6s ease-out var(--anim-delay, 0ms) both; }
+.player.anim-in .pname, .player.anim-change .pname { animation: name-flash .7s ease-out var(--anim-delay, 0ms) both; }
+
+@keyframes card-in {
+  0% { transform: translateY(-28px) scale(.6) rotate(-8deg); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes card-change {
+  0%, 100% { transform: none; }
+  20% { transform: translateY(-8px) rotate(-7deg); }
+  45% { transform: translateY(-8px) rotate(7deg); }
+  70% { transform: translateY(-3px) rotate(-3deg); }
+}
+@keyframes card-out {
+  0% { transform: scale(1.06); }
+  100% { transform: none; }
+}
+@keyframes card-flip {
+  0% { transform: perspective(300px) rotateY(90deg); }
+  100% { transform: perspective(300px) rotateY(0); }
+}
+@keyframes name-flash {
+  0% { color: var(--accent); }
+  100% { color: inherit; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player .slot, .player .pname { animation: none !important; }
+}

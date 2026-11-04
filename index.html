@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planning Poker</title>
+  <meta name="description" content="Simple, free planning poker. Create a session, share the invite link, estimate together.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">🃏 Planning Poker</a>
+    <span id="status" class="status" hidden></span>
+  </header>
+
+  <main>
+    <!-- Landing: create or join -->
+    <section id="landing" class="card-panel" hidden>
+      <h1>Estimate together</h1>
+      <p class="muted">Start a session and send the invite link. No sign-up, no server — players connect directly to each other.</p>
+
+      <label for="name">Your name</label>
+      <input id="name" maxlength="24" autocomplete="nickname" placeholder="e.g. Alex">
+
+      <div id="join-hint" class="hint" hidden>You're joining session <b id="join-token"></b></div>
+
+      <button id="create" class="primary">Create new session</button>
+      <button id="join-invite" class="primary" hidden>Join session</button>
+
+      <details id="join-box">
+        <summary>Have a session token?</summary>
+        <div class="row">
+          <input id="token-input" maxlength="16" placeholder="Session token" autocapitalize="characters">
+          <button id="join">Join</button>
+        </div>
+      </details>
+      <p id="landing-error" class="error" hidden></p>
+    </section>
+
+    <!-- Room -->
+    <section id="room" hidden>
+      <div class="room-head">
+        <div>
+          <div class="muted small">Session</div>
+          <div class="token" id="room-token"></div>
+        </div>
+        <button id="invite" class="secondary">Copy invite link</button>
+      </div>
+
+      <input id="topic" class="topic" maxlength="140" placeholder="What are we estimating? (optional)">
+
+      <ul id="players" class="players"></ul>
+
+      <div id="results" class="results" hidden></div>
+
+      <div class="actions">
+        <button id="reveal" class="primary">Reveal cards</button>
+        <button id="reset" class="secondary">New round</button>
+      </div>
+
+      <h2 class="small muted">Pick a card</h2>
+      <div id="deck" class="deck"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

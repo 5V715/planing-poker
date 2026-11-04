@@ -9,6 +9,15 @@ A tiny, serverless planning poker app that runs on GitHub Pages.
 5. Paste a ticket link into the topic (press Return to save) — Jira and GitHub links get short labels like `SHOP-142` and are clickable.
 6. Every revealed round is kept in **History** (saved in your browser per session). Tap a round to see who voted what, **Vote again** to re-estimate it, or **Copy as text** to paste the results elsewhere.
 
+## Linear (optional)
+
+Tap the Linear logo next to **Copy invite link** to connect your own Linear account:
+enter your workspace slug, tap **Create API key in Linear** (opens Linear's "new API key" page),
+paste the key and **Connect**. The key is only sent to `api.linear.app` — never to other players.
+**Remember on this device** keeps it in this browser until you tap **Forget key**; note that other
+sites on the same address (other GitHub Pages projects of this account) could read saved data.
+Grey logo = not connected, colourful logo with rainbow ring = connected, amber dot = key not working.
+
 ## How it works
 
 No backend. Browsers connect to each other directly over WebRTC using [PeerJS](https://peerjs.com).

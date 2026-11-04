@@ -185,3 +185,75 @@ select {
 a { color: var(--accent); }
 .topic-view a, .history a { font-weight: 600; text-decoration: none; }
 .topic-view a:hover, .history a:hover { text-decoration: underline; }
+
+/* ---------- Linear ---------- */
+.room-head-actions { display: flex; align-items: center; gap: 8px; }
+.lin-logo { width: 20px; height: 20px; flex: none; fill: #9aa0a8; }
+.lin-logo.on, .lin-btn.on .lin-logo, .lin-btn.err .lin-logo { fill: url(#lin-rainbow); }
+
+.lin-btn {
+  position: relative; display: inline-flex; align-items: center; height: 42px; min-width: 42px;
+  padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel);
+  font-size: 14px; white-space: nowrap;
+}
+.lin-btn .label {
+  max-width: 0; overflow: hidden; opacity: 0;
+  transition: max-width .25s ease, opacity .2s ease, margin .25s ease;
+}
+/* Expand to text only where a real hover exists (not on touch screens). */
+@media (hover: hover) {
+  .lin-btn:hover .label, .lin-btn:focus-visible .label { max-width: 220px; opacity: 1; margin: 0 4px 0 8px; }
+}
+#invite { white-space: nowrap; }
+.lin-btn.off .lin-logo { opacity: .55; }
+.lin-btn.off .label { color: var(--muted); }
+.lin-btn.on {
+  border: 2px solid transparent; padding: 0 9px;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(120deg, #ff5f6d, #ffc371, #47e891, #37b5ff, #8b5cf6) border-box;
+}
+.lin-btn .badge {
+  position: absolute; right: -2px; top: -2px; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--bg); display: none;
+}
+.lin-btn.on .badge { display: block; background: var(--good); }
+.lin-btn.err .badge { display: block; background: #f59f00; }
+.lin-btn.busy .lin-logo { animation: lin-pulse 1s ease-in-out infinite; }
+@keyframes lin-pulse { 50% { opacity: .35; } }
+
+.scrim { position: fixed; inset: 0; background: rgba(10, 12, 16, .45); z-index: 10; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-height: 92vh; overflow: auto;
+  background: var(--panel); border-radius: 16px 16px 0 0; padding: 20px 16px 24px;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, .2);
+}
+.sheet > div { display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 560px) {
+  .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); width: 440px; border-radius: 16px; }
+}
+.sheet h3 { margin: 0 0 10px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.sheet h3 .lin-logo { width: 22px; height: 22px; }
+.sheet-close { position: absolute; right: 10px; top: 10px; border: none; background: none; font-size: 24px; line-height: 1; color: var(--muted); padding: 6px 10px; }
+.sheet .note { font-size: 13px; color: var(--muted); margin: 0; }
+.sheet .error { margin: 0; }
+.step { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 6px; }
+.prefix { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg); font-weight: 400; font-size: 16px; }
+.prefix:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.prefix span { padding: 10px 0 10px 12px; color: var(--muted); }
+.prefix input { border: none; padding-left: 2px; outline: none; }
+.btn-full { width: 100%; }
+a.button {
+  display: block; text-align: center; text-decoration: none; font-weight: 600; border-radius: 8px; padding: 10px 16px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+a.button[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.keyrow { display: flex; gap: 8px; }
+.keyrow input { font-family: ui-monospace, Menlo, monospace; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 400; }
+.check input { width: auto; margin-top: 3px; }
+.check small { display: block; color: var(--muted); font-size: 12px; }
+.ok-box { background: var(--bg); border-radius: 10px; padding: 12px; display: flex; gap: 10px; align-items: center; }
+.ok-box .avatar { width: 38px; height: 38px; flex: none; border-radius: 50%; background: #5e6ad2; color: #fff; display: grid; place-items: center; font-weight: 700; }
+button.danger { color: var(--error); border-color: var(--error); background: transparent; }
+.svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }

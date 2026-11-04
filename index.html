@@ -3,12 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only talk to PeerJS (to find players) and Linear. Localhost is allowed for development. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.linear.app https://0.peerjs.com wss://0.peerjs.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Planning Poker</title>
   <meta name="description" content="Simple, free planning poker. Create a session, share the invite link, estimate together.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <linearGradient id="lin-rainbow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff5f6d"/><stop offset=".3" stop-color="#ffb347"/>
+      <stop offset=".55" stop-color="#47e891"/><stop offset=".78" stop-color="#37b5ff"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </svg>
   <header class="topbar">
     <a class="brand" href="./">🃏 Planning Poker</a>
     <span id="status" class="status" hidden></span>
@@ -45,7 +54,12 @@
           <div class="muted small">Session</div>
           <div class="token" id="room-token"></div>
         </div>
-        <button id="invite" class="secondary">Copy invite link</button>
+        <div class="room-head-actions">
+          <button id="linear-btn" class="lin-btn off" type="button" aria-label="Connect Linear">
+            <svg class="lin-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z"/></svg><span class="label" id="linear-label">Connect Linear</span><span class="badge"></span>
+          </button>
+          <button id="invite" class="secondary">Copy invite link</button>
+        </div>
       </div>
 
       <input id="topic" class="topic" maxlength="300" enterkeyhint="done"
@@ -82,7 +96,46 @@
 
   <div id="toast" class="toast" hidden></div>
 
+  <!-- Linear connect panel -->
+  <div id="linear-scrim" class="scrim" hidden></div>
+  <div id="linear-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="linear-title" hidden>
+    <button id="linear-close" class="sheet-close" type="button" aria-label="Close">×</button>
+    <h3 id="linear-title"><svg class="lin-logo on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z"/></svg><span id="linear-title-text">Connect Linear</span></h3>
+
+    <div id="linear-connect">
+      <p class="note">Your key stays in this browser. It is never sent to other players.</p>
+      <div class="step">1 · Your Linear workspace</div>
+      <label class="prefix" for="linear-slug"><span>linear.app/</span>
+        <input id="linear-slug" placeholder="workspace" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </label>
+      <a id="linear-create" class="button secondary btn-full" target="_blank" rel="noopener noreferrer" aria-disabled="true">Create API key in Linear ↗</a>
+      <div class="step">2 · Paste the key</div>
+      <div class="keyrow">
+        <input id="linear-key" type="password" placeholder="lin_api_…" autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button id="linear-show" class="secondary" type="button">Show</button>
+      </div>
+      <label class="check"><input id="linear-remember" type="checkbox" checked>
+        <span>Remember on this device<small>Saved in this browser until you tap Forget key. Other sites on the same address (e.g. other GitHub Pages projects of this account) could read it.</small></span>
+      </label>
+      <p id="linear-error" class="error small" hidden></p>
+      <button id="linear-submit" class="primary btn-full" type="button">Connect</button>
+    </div>
+
+    <div id="linear-connected" hidden>
+      <div class="ok-box">
+        <div class="avatar" id="linear-avatar"></div>
+        <div><b id="linear-name"></b><div class="note" id="linear-meta"></div></div>
+      </div>
+      <p id="linear-problem" class="error small" hidden></p>
+      <button id="linear-retry" class="secondary btn-full" type="button" hidden>Try again</button>
+      <button id="linear-change" class="secondary btn-full" type="button">Change workspace or key</button>
+      <button id="linear-forget" class="danger btn-full" type="button">Forget key</button>
+      <p class="note">Forgetting removes the key from this browser. To fully revoke it, delete it in Linear → Settings → Security.</p>
+    </div>
+  </div>
+
   <script src="vendor/peerjs.min.js"></script>
   <script src="app.js"></script>
+  <script src="linear.js"></script>
 </body>
 </html>

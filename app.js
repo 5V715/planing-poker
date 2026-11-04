@@ -56,7 +56,53 @@
   let view = null;
 
   function freshState() {
-    return { topic: "", deck: "fib", revealed: false, players: {} };
+    return { topic: "", deck: "fib", revealed: false, players: {}, history: [] };
+  }
+
+  // ---------- History (revealed rounds) ----------
+
+  const HISTORY_MAX = 100;
+  const historyKey = () => "pp-history-" + token;
+
+  function loadHistory() {
+    try {
+      const h = JSON.parse(store.get(historyKey()) || "[]");
+      return Array.isArray(h) ? h : [];
+    } catch { return []; }
+  }
+
+  function saveHistory(h) {
+    store.set(historyKey(), JSON.stringify(h || []));
+  }
+
+  // Union of rounds by id, newest first.
+  function mergeHistory(...lists) {
+    const byId = new Map();
+    for (const list of lists) for (const r of list || []) if (r && r.id && !byId.has(r.id)) byId.set(r.id, r);
+    return [...byId.values()].sort((a, b) => b.at - a.at).slice(0, HISTORY_MAX);
+  }
+
+  // Result summary for a list of card values.
+  function summarize(votes, deck) {
+    const counts = {};
+    for (const v of votes) counts[v] = (counts[v] || 0) + 1;
+    let label, value;
+    if (deck === "tshirt") {
+      // Most voted size(s); "?" and "☕" don't count.
+      const sized = Object.entries(counts).filter(([v]) => v !== "?" && v !== "☕");
+      const top = Math.max(0, ...sized.map(([, c]) => c));
+      label = "Most votes";
+      value = top ? sized.filter(([, c]) => c === top).map(([v]) => v).join(" / ") : "–";
+    } else {
+      const nums = votes.map((v) => (v === "½" ? 0.5 : Number(v))).filter((n) => !Number.isNaN(n));
+      label = "Average";
+      value = nums.length
+        ? (Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10).toString()
+        : "–";
+    }
+    const dist = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([v, c]) => `${v} × ${c}`).join("  ·  ");
+    const consensus = votes.length > 1 && Object.keys(counts).length === 1;
+    return { label, value, dist, consensus };
   }
 
   function newToken() {
@@ -122,6 +168,7 @@
         hostLastSeen = Date.now();
         if (msg && msg.type === "state") {
           view = msg.state;
+          view.history = mergeHistory(view.history, loadHistory());
           syncMyVoteFromView();
           render();
         }
@@ -175,6 +222,7 @@
       state.deck = DECKS[prev.deck] ? prev.deck : "fib";
       state.revealed = !!prev.revealed;
     }
+    state.history = mergeHistory(prev && prev.history, loadHistory());
     state.players[clientId] = { name: myName, vote: myVote };
     setStatus("Connected (hosting)", "ok");
     broadcast();
@@ -237,7 +285,17 @@
     } else if (msg.type === "vote") {
       if (msg.value === null || cardsOf(state.deck).includes(msg.value)) state.players[id].vote = msg.value;
     } else if (msg.type === "reveal") {
+      if (state.revealed) return;
       state.revealed = true;
+      const votes = Object.values(state.players)
+        .filter((p) => p.vote !== null)
+        .map((p) => [p.name, p.vote]);
+      if (votes.length) {
+        state.history = [
+          { id: Math.random().toString(36).slice(2, 10), at: Date.now(), topic: state.topic, deck: state.deck, votes },
+          ...state.history,
+        ].slice(0, HISTORY_MAX);
+      }
     } else if (msg.type === "reset") {
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
@@ -246,8 +304,16 @@
       state.deck = msg.deck;
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
+    } else if (msg.type === "revote") {
+      // Start a fresh round for a topic from the history.
+      state.topic = String(msg.topic || "").slice(0, 140);
+      if (DECKS[msg.deck]) state.deck = msg.deck;
+      state.revealed = false;
+      for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "topic") {
       state.topic = String(msg.topic || "").slice(0, 140);
+      // Naming the round right after revealing it? Keep the history entry in sync.
+      if (state.revealed && state.history[0]) state.history[0].topic = state.topic;
     } else {
       return;
     }
@@ -261,7 +327,7 @@
       const vote = state.revealed || id === pid ? p.vote : p.vote === null ? null : true;
       players[id] = { name: p.name, vote };
     }
-    return { topic: state.topic, deck: state.deck, revealed: state.revealed, players };
+    return { topic: state.topic, deck: state.deck, revealed: state.revealed, players, history: state.history };
   }
 
   function broadcast() {
@@ -365,35 +431,16 @@
     if (view.revealed && votes.length) {
       res.hidden = false;
       res.innerHTML = "";
-      const nums = votes.map((v) => (v === "½" ? 0.5 : Number(v))).filter((n) => !Number.isNaN(n));
-      const counts = {};
-      for (const v of votes) counts[v] = (counts[v] || 0) + 1;
-      const consensus = Object.keys(counts).length === 1;
-
+      const sum = summarize(votes, view.deck);
       const avg = document.createElement("div");
       avg.innerHTML = `<div class="small muted"></div><div class="big"></div>`;
-      if (view.deck === "tshirt") {
-        // Most voted size(s); "?" and "☕" don't count.
-        const sized = Object.entries(counts).filter(([v]) => v !== "?" && v !== "☕");
-        const top = Math.max(0, ...sized.map(([, c]) => c));
-        avg.firstChild.textContent = "Most votes";
-        avg.lastChild.textContent = top
-          ? sized.filter(([, c]) => c === top).map(([v]) => v).join(" / ")
-          : "–";
-      } else {
-        avg.firstChild.textContent = "Average";
-        avg.lastChild.textContent = nums.length
-          ? (Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10).toString()
-          : "–";
-      }
+      avg.firstChild.textContent = sum.label;
+      avg.lastChild.textContent = sum.value;
       const dist = document.createElement("div");
       dist.className = "dist";
-      dist.textContent = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([v, c]) => `${v} × ${c}`)
-        .join("  ·  ");
+      dist.textContent = sum.dist;
       res.append(avg, dist);
-      if (consensus && votes.length > 1) {
+      if (sum.consensus) {
         const c = document.createElement("div");
         c.className = "big";
         c.textContent = "🎉 Consensus!";
@@ -402,6 +449,74 @@
     } else {
       res.hidden = true;
     }
+
+    renderHistory();
+  }
+
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    const sameDay = d.toDateString() === new Date().toDateString();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderHistory() {
+    const history = view.history || [];
+    saveHistory(history);
+    $("history-section").hidden = history.length === 0;
+    $("history-count").textContent = history.length ? `(${history.length})` : "";
+    const ol = $("history");
+    const open = new Set([...ol.querySelectorAll("details[open]")].map((d) => d.dataset.id));
+    ol.innerHTML = "";
+    for (const r of history) {
+      const sum = summarize(r.votes.map(([, v]) => v), r.deck);
+      const li = document.createElement("li");
+      const det = document.createElement("details");
+      det.dataset.id = r.id;
+      det.open = open.has(r.id);
+
+      const summary = document.createElement("summary");
+      const title = document.createElement("span");
+      title.className = "h-topic";
+      title.textContent = r.topic || "Untitled round";
+      const result = document.createElement("span");
+      result.className = "h-result";
+      result.textContent = (sum.consensus ? "🎉 " : "") + sum.value;
+      const meta = document.createElement("span");
+      meta.className = "h-meta";
+      meta.textContent = `${fmtTime(r.at)} · ${DECKS[r.deck] ? DECKS[r.deck].label : ""} · ${sum.dist}`;
+      summary.append(title, result, meta);
+
+      const votes = document.createElement("ul");
+      votes.className = "h-votes";
+      for (const [name, v] of r.votes) {
+        const vi = document.createElement("li");
+        const b = document.createElement("b");
+        b.textContent = v;
+        vi.append(b, document.createTextNode(" " + name));
+        votes.append(vi);
+      }
+      const again = document.createElement("button");
+      again.className = "secondary small-btn";
+      again.textContent = "Vote again";
+      again.onclick = () => {
+        myVote = null;
+        send({ type: "revote", topic: r.topic, deck: r.deck });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      };
+      det.append(summary, votes, again);
+      li.append(det);
+      ol.append(li);
+    }
+  }
+
+  function historyAsText() {
+    return (view.history || []).slice().reverse().map((r) => {
+      const sum = summarize(r.votes.map(([, v]) => v), r.deck);
+      const votes = r.votes.map(([n, v]) => `${n}: ${v}`).join(", ");
+      return `${r.topic || "Untitled round"} — ${sum.label}: ${sum.value} (${votes})`;
+    }).join("\n");
   }
 
   function showRoom() {
@@ -409,7 +524,7 @@
     $("room").hidden = false;
     $("room-token").textContent = token;
     document.title = `Planning Poker · ${token}`;
-    view = { topic: "", deck: "fib", revealed: false, players: { [clientId]: { name: myName, vote: null } } };
+    view = { topic: "", deck: "fib", revealed: false, players: { [clientId]: { name: myName, vote: null } }, history: loadHistory() };
     render();
     connect();
   }
@@ -478,6 +593,16 @@
     clearTimeout(topicTimer);
     topicTimer = setTimeout(() => send({ type: "topic", topic: e.target.value }), 300);
   });
+
+  $("history-copy").onclick = async () => {
+    const text = historyAsText();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("History copied");
+    } catch {
+      prompt("Copy the history:", text);
+    }
+  };
 
   $("invite").onclick = async () => {
     const url = inviteUrl();

@@ -16,6 +16,10 @@ enter your workspace slug, tap **Create API key in Linear** (opens Linear's "new
 paste the key and **Connect**. The key is only sent to `api.linear.app` — never to other players.
 **Remember on this device** keeps it in this browser until you tap **Forget key**; note that other
 sites on the same address (other GitHub Pages projects of this account) could read saved data.
+With Linear connected, put a Linear ticket link (or just its key, e.g. `ENG-142`) in the topic:
+your browser loads the title, state, current estimate and formatted description, shares them
+with the room, and switches the cards to that team's estimation scale (Fibonacci, Exponential,
+Linear or T-shirt, including "allow zero" and "extended"). Players without Linear see it too.
 Grey logo = not connected, colourful logo with rainbow ring = connected, amber dot = key not working.
 
 ## How it works

@@ -8,7 +8,46 @@
     fib: { label: "Fibonacci", cards: ["0", "½", "1", "2", "3", "5", "8", "13", "21", "40", "100", "?", "☕"] },
     tshirt: { label: "T-shirt", cards: ["XS", "S", "M", "L", "XL", "XXL", "?", "☕"] },
   };
-  const cardsOf = (deck) => (DECKS[deck] || DECKS.fib).cards;
+
+  // Linear team estimation scales. T-shirt sizes are stored in Linear as numbers.
+  const LINEAR_SCALES = {
+    fibonacci: { label: "Fibonacci", base: [1, 2, 3, 5, 8], extended: [13, 21] },
+    exponential: { label: "Exponential", base: [1, 2, 4, 8, 16], extended: [32, 64] },
+    linear: { label: "Linear", base: [1, 2, 3, 4, 5], extended: [6, 7] },
+    tShirt: { label: "T-shirt", base: [1, 2, 3, 5, 8], extended: [13, 21] },
+  };
+  const TSHIRT_SIZES = { 0: "–", 1: "XS", 2: "S", 3: "M", 5: "L", 8: "XL", 13: "XXL", 21: "XXXL" };
+
+  // Card list for a Linear scale: [{ card, value }] where value is what Linear stores.
+  function linearCards(scale) {
+    const def = scale && LINEAR_SCALES[scale.type];
+    if (!def) return null;
+    const nums = [...(scale.allowZero ? [0] : []), ...def.base, ...(scale.extended ? def.extended : [])];
+    return nums.map((n) => ({ card: scale.type === "tShirt" ? TSHIRT_SIZES[n] || String(n) : String(n), value: n }));
+  }
+
+  // { label, cards, sizes } for a deck id. "linear" uses the current ticket's team scale.
+  function deckInfo(deck, scale) {
+    if (deck === "linear") {
+      const lc = linearCards(scale);
+      if (lc) {
+        return {
+          label: `Linear · ${LINEAR_SCALES[scale.type].label}`,
+          cards: [...lc.map((c) => c.card), "?", "☕"],
+          sizes: scale.type === "tShirt",
+        };
+      }
+    }
+    const d = DECKS[deck] || DECKS.fib;
+    return { label: d.label, cards: d.cards, sizes: deck === "tshirt" };
+  }
+
+  // Linear estimate number -> how it reads on that team's scale.
+  function estimateLabel(estimate, scale) {
+    if (estimate === null || estimate === undefined) return null;
+    if (scale && scale.type === "tShirt") return TSHIRT_SIZES[estimate] || String(estimate);
+    return `${estimate} ${estimate === 1 ? "point" : "points"}`;
+  }
   const ID_PREFIX = "planning-poker-v1-";
   const TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
 
@@ -61,7 +100,51 @@
   const ANIM_MS = 700;
 
   function freshState() {
-    return { topic: "", deck: "fib", revealed: false, players: {}, history: [] };
+    return { topic: "", deck: "fib", revealed: false, players: {}, history: [], ticket: null, linearScale: null };
+  }
+
+  // ---------- Linear tickets ----------
+
+  // "ENG-123" from a Linear URL in the topic, or a bare key when the topic has no other link.
+  function linearRef(topic) {
+    const t = topic || "";
+    const m = t.match(/linear\.app\/[^/\s]+\/issue\/([A-Za-z][A-Za-z0-9]*-\d+)/);
+    if (m) return { id: m[1].toUpperCase(), fromUrl: true };
+    if (/https?:\/\//.test(t)) return null;
+    const k = t.match(/\b([A-Z][A-Z0-9]{0,9}-\d{1,7})\b/);
+    return k ? { id: k[1], fromUrl: false } : null;
+  }
+
+  function topicMentions(topic, ticket) {
+    const ref = linearRef(topic);
+    return !!ref && ref.id === ticket.identifier.toUpperCase();
+  }
+
+  function cleanScale(sc) {
+    if (!sc || typeof sc !== "object") return null;
+    const type = String(sc.type || "");
+    if (!LINEAR_SCALES[type] && type !== "notUsed") return null;
+    return { type, allowZero: !!sc.allowZero, extended: !!sc.extended };
+  }
+
+  // Tickets arrive from other players: keep only expected fields, bounded in size.
+  function cleanTicket(t) {
+    if (!t || typeof t !== "object") return null;
+    const identifier = String(t.identifier || "").toUpperCase();
+    if (!/^[A-Z][A-Z0-9]*-\d+$/.test(identifier)) return null;
+    const url = String(t.url || "");
+    const color = String(t.stateColor || "");
+    return {
+      identifier,
+      title: String(t.title || "").slice(0, 300),
+      url: /^https:\/\/linear\.app\//.test(url) ? url.slice(0, 500) : "",
+      description: String(t.description || "").slice(0, 20000),
+      estimate: Number.isFinite(t.estimate) ? t.estimate : null,
+      stateName: String(t.stateName || "").slice(0, 60),
+      stateColor: /^#[0-9a-f]{3,8}$/i.test(color) ? color : "",
+      team: String(t.team || "").slice(0, 80),
+      scale: cleanScale(t.scale),
+    };
   }
 
   // ---------- History (revealed rounds) ----------
@@ -88,11 +171,11 @@
   }
 
   // Result summary for a list of card values.
-  function summarize(votes, deck) {
+  function summarize(votes, sizes) {
     const counts = {};
     for (const v of votes) counts[v] = (counts[v] || 0) + 1;
     let label, value;
-    if (deck === "tshirt") {
+    if (sizes) {
       // Most voted size(s); "?" and "☕" don't count.
       const sized = Object.entries(counts).filter(([v]) => v !== "?" && v !== "☕");
       const top = Math.max(0, ...sized.map(([, c]) => c));
@@ -224,7 +307,9 @@
     state = freshState();
     if (prev) {
       state.topic = prev.topic || "";
-      state.deck = DECKS[prev.deck] ? prev.deck : "fib";
+      state.ticket = cleanTicket(prev.ticket);
+      state.linearScale = state.ticket ? state.ticket.scale : cleanScale(prev.linearScale);
+      state.deck = DECKS[prev.deck] || (prev.deck === "linear" && linearCards(state.linearScale)) ? prev.deck : "fib";
       state.revealed = !!prev.revealed;
     }
     state.history = mergeHistory(prev && prev.history, loadHistory());
@@ -283,12 +368,12 @@
     if (msg.type === "join" && conn) {
       const pid = String(msg.id || conn.peer).slice(0, 32);
       conns.set(conn, pid);
-      const vote = cardsOf(state.deck).includes(msg.vote) ? msg.vote : null;
+      const vote = deckInfo(state.deck, state.linearScale).cards.includes(msg.vote) ? msg.vote : null;
       state.players[pid] = { name: cleanName(msg.name), vote };
     } else if (!id || !state.players[id]) {
       return;
     } else if (msg.type === "vote") {
-      if (msg.value !== null && !cardsOf(state.deck).includes(msg.value)) return;
+      if (msg.value !== null && !deckInfo(state.deck, state.linearScale).cards.includes(msg.value)) return;
       state.players[id].vote = msg.value;
       state.players[id].n = (state.players[id].n || 0) + 1;
     } else if (msg.type === "reveal") {
@@ -299,7 +384,13 @@
         .map((p) => [p.name, p.vote]);
       if (votes.length) {
         state.history = [
-          { id: Math.random().toString(36).slice(2, 10), at: Date.now(), topic: state.topic, deck: state.deck, votes },
+          {
+            id: Math.random().toString(36).slice(2, 10), at: Date.now(), topic: state.topic, votes,
+            deck: state.deck,
+            deckLabel: deckInfo(state.deck, state.linearScale).label,
+            sizes: deckInfo(state.deck, state.linearScale).sizes,
+            title: state.ticket ? state.ticket.title : undefined,
+          },
           ...state.history,
         ].slice(0, HISTORY_MAX);
       }
@@ -307,20 +398,39 @@
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "deck") {
-      if (!DECKS[msg.deck] || msg.deck === state.deck) return;
+      if (msg.deck === state.deck) return;
+      if (!DECKS[msg.deck] && !(msg.deck === "linear" && linearCards(state.linearScale))) return;
       state.deck = msg.deck;
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "revote") {
       // Start a fresh round for a topic from the history.
       state.topic = String(msg.topic || "").slice(0, 300);
-      if (DECKS[msg.deck]) state.deck = msg.deck;
+      if (state.ticket && !topicMentions(state.topic, state.ticket)) state.ticket = null;
+      if (DECKS[msg.deck] || (msg.deck === "linear" && linearCards(state.linearScale))) state.deck = msg.deck;
       state.revealed = false;
       for (const p of Object.values(state.players)) p.vote = null;
     } else if (msg.type === "topic") {
       state.topic = String(msg.topic || "").slice(0, 300);
       // Naming the round right after revealing it? Keep the history entry in sync.
       if (state.revealed && state.history[0]) state.history[0].topic = state.topic;
+      if (state.ticket && !topicMentions(state.topic, state.ticket)) state.ticket = null;
+    } else if (msg.type === "ticket") {
+      // A player with Linear connected loaded the ticket named in the topic.
+      const t = cleanTicket(msg.ticket);
+      if (!t || !topicMentions(state.topic, t)) return;
+      state.ticket = t;
+      if (linearCards(t.scale)) {
+        const before = deckInfo(state.deck, state.linearScale).cards.join();
+        state.linearScale = t.scale;
+        state.deck = "linear";
+        // Different cards than before? Votes from the old deck no longer fit.
+        if (deckInfo("linear", t.scale).cards.join() !== before) {
+          state.revealed = false;
+          for (const p of Object.values(state.players)) p.vote = null;
+        }
+      }
+      if (state.revealed && state.history[0] && !state.history[0].title) state.history[0].title = t.title;
     } else {
       return;
     }
@@ -334,7 +444,10 @@
       const vote = state.revealed || id === pid ? p.vote : p.vote === null ? null : true;
       players[id] = { name: p.name, vote, n: p.n || 0 };
     }
-    return { topic: state.topic, deck: state.deck, revealed: state.revealed, players, history: state.history };
+    return {
+      topic: state.topic, deck: state.deck, revealed: state.revealed, players, history: state.history,
+      ticket: state.ticket, linearScale: state.linearScale,
+    };
   }
 
   function broadcast() {
@@ -443,8 +556,20 @@
     // Deck
     const deck = $("deck");
     deck.innerHTML = "";
-    $("deck-select").value = view.deck || "fib";
-    for (const value of cardsOf(view.deck)) {
+    const sel = $("deck-select");
+    let linOpt = sel.querySelector('option[value="linear"]');
+    if (linearCards(view.linearScale)) {
+      if (!linOpt) {
+        linOpt = document.createElement("option");
+        linOpt.value = "linear";
+        sel.append(linOpt);
+      }
+      linOpt.textContent = deckInfo("linear", view.linearScale).label;
+    } else if (linOpt) {
+      linOpt.remove();
+    }
+    sel.value = view.deck || "fib";
+    for (const value of deckInfo(view.deck, view.linearScale).cards) {
       const b = document.createElement("button");
       b.textContent = value;
       b.disabled = view.revealed;
@@ -467,7 +592,7 @@
     if (view.revealed && votes.length) {
       res.hidden = false;
       res.innerHTML = "";
-      const sum = summarize(votes, view.deck);
+      const sum = summarize(votes, deckInfo(view.deck, view.linearScale).sizes);
       const avg = document.createElement("div");
       avg.innerHTML = `<div class="small muted"></div><div class="big"></div>`;
       avg.firstChild.textContent = sum.label;
@@ -487,6 +612,141 @@
     }
 
     renderHistory();
+    renderTicket();
+    maybeFetchTicket();
+  }
+
+  // ---------- Ticket card ----------
+
+  let ticketFetch = null; // { id, status: "loading" | "error", message }
+  let ticketExpanded = false;
+  let shownTicketId = null;
+
+  function maybeFetchTicket(force) {
+    const ref = linearRef(view.topic);
+    const lin = window.PPLinear;
+    if (!ref || !lin || !lin.connected) return;
+    if (!force && view.ticket && view.ticket.identifier === ref.id) return;
+    if (ticketFetch && ticketFetch.id === ref.id && (ticketFetch.status === "loading" || !force)) return;
+    ticketFetch = { id: ref.id, status: "loading", fromUrl: ref.fromUrl };
+    renderTicket();
+    lin.fetchIssue(ref.id).then(
+      (t) => {
+        if (!ticketFetch || ticketFetch.id !== ref.id) return;
+        ticketFetch = null;
+        send({ type: "ticket", ticket: t });
+        render();
+      },
+      (e) => {
+        if (!ticketFetch || ticketFetch.id !== ref.id) return;
+        ticketFetch = { id: ref.id, status: "error", fromUrl: ref.fromUrl, message: e.message || String(e) };
+        renderTicket();
+      }
+    );
+  }
+
+  // Markdown -> sanitized HTML. Images are shown as links (Linear uploads need a login).
+  function renderMarkdown(md) {
+    const box = document.createElement("div");
+    if (!window.marked || !window.DOMPurify) {
+      box.textContent = md;
+      box.classList.add("plain");
+      return box;
+    }
+    const html = window.marked.parse(md, { gfm: true, breaks: true });
+    if (!renderMarkdown.hooked) {
+      // Move image URLs aside while still in the sanitizer's inert document, so nothing loads.
+      window.DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+        if (node.tagName === "IMG") {
+          node.setAttribute("data-src", node.getAttribute("src") || "");
+          node.removeAttribute("src");
+          node.removeAttribute("srcset");
+        }
+      });
+      renderMarkdown.hooked = true;
+    }
+    box.innerHTML = window.DOMPurify.sanitize(html, {
+      FORBID_TAGS: ["style", "form", "iframe", "video", "audio", "source", "picture"],
+      FORBID_ATTR: ["style", "class", "id"],
+    });
+    for (const img of box.querySelectorAll("img")) {
+      const src = img.getAttribute("data-src") || "";
+      const a = document.createElement("a");
+      a.textContent = "🖼 " + (img.getAttribute("alt") || "image");
+      if (/^https?:/.test(src)) a.href = src;
+      img.replaceWith(a);
+    }
+    for (const a of box.querySelectorAll("a")) {
+      const href = a.getAttribute("href") || "";
+      if (!/^(https?:|mailto:)/i.test(href)) a.removeAttribute("href");
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    for (const cb of box.querySelectorAll("input")) {
+      if (cb.type === "checkbox") cb.disabled = true;
+      else cb.remove();
+    }
+    return box;
+  }
+
+  function renderTicket() {
+    const card = $("ticket");
+    const t = view.ticket;
+    const ref = linearRef(view.topic);
+    const lin = window.PPLinear;
+
+    // Status line when there's no ticket loaded yet.
+    const note = $("ticket-note");
+    let noteText = "";
+    if (!t && ref && ticketFetch && ticketFetch.id === ref.id) {
+      if (ticketFetch.status === "loading") noteText = `Loading ${ref.id} from Linear…`;
+      else if (ticketFetch.fromUrl) noteText = `Couldn't load ${ref.id} from Linear: ${ticketFetch.message}`;
+    } else if (!t && ref && ref.fromUrl && !(lin && lin.connected)) {
+      noteText = "Connect Linear (logo at the top) to load this ticket and its estimate scale.";
+    }
+    note.textContent = noteText;
+    note.hidden = !noteText;
+
+    if (!t) {
+      card.hidden = true;
+      shownTicketId = null;
+      return;
+    }
+    card.hidden = false;
+    $("ticket-id").textContent = t.identifier;
+    if (t.url) $("ticket-id").href = t.url; else $("ticket-id").removeAttribute("href");
+    $("ticket-state").textContent = t.stateName;
+    $("ticket-state").hidden = !t.stateName;
+    $("ticket-state-dot").style.background = t.stateColor || "var(--muted)";
+    $("ticket-title").textContent = t.title;
+
+    const est = estimateLabel(t.estimate, t.scale);
+    const meta = [];
+    if (t.team) meta.push(t.team);
+    if (t.scale && t.scale.type === "notUsed") meta.push("estimates are off for this team");
+    else if (t.scale && LINEAR_SCALES[t.scale.type]) meta.push(`${LINEAR_SCALES[t.scale.type].label} scale`);
+    meta.push(est ? `Linear estimate: ${est}` : "Not estimated yet");
+    $("ticket-meta").textContent = meta.join(" · ");
+
+    $("ticket-refresh").hidden = !(lin && lin.connected);
+
+    // Only rebuild the description when the ticket changes (keeps scroll/expand state).
+    const key = t.identifier + "|" + t.description;
+    if (shownTicketId !== key) {
+      if (!shownTicketId || shownTicketId.split("|")[0] !== t.identifier) ticketExpanded = false;
+      shownTicketId = key;
+      const desc = $("ticket-desc");
+      desc.replaceChildren(t.description ? renderMarkdown(t.description) : "");
+      desc.hidden = !t.description;
+    }
+    const desc = $("ticket-desc");
+    desc.classList.toggle("collapsed", !ticketExpanded);
+    // Show the toggle only if the text is actually cut off.
+    requestAnimationFrame(() => {
+      const overflowing = desc.scrollHeight > desc.clientHeight + 4;
+      $("ticket-more").hidden = !t.description || (!overflowing && !ticketExpanded);
+      $("ticket-more").textContent = ticketExpanded ? "Show less" : "Show more";
+    });
   }
 
   // Text -> fragment with http(s) links turned into <a>. Ticket URLs get short labels.
@@ -499,6 +759,8 @@
       const jira = u.pathname.match(/\/browse\/([A-Z][A-Z0-9_]+-\d+)/i) ||
         (u.searchParams.get("selectedIssue") || "").match(/^([A-Z][A-Z0-9_]+-\d+)$/i);
       if (jira) return jira[1].toUpperCase();
+      const lin = u.hostname === "linear.app" && u.pathname.match(/\/issue\/([A-Za-z][A-Za-z0-9]*-\d+)/);
+      if (lin) return lin[1].toUpperCase();
       const gh = u.pathname.match(/^\/[^/]+\/([^/]+)\/(?:issues|pull)\/(\d+)/);
       if (gh && /github|gitlab/.test(u.hostname)) return `${gh[1]}#${gh[2]}`;
       const last = parts[parts.length - 1];
@@ -546,7 +808,7 @@
     const open = new Set([...ol.querySelectorAll("details[open]")].map((d) => d.dataset.id));
     ol.innerHTML = "";
     for (const r of history) {
-      const sum = summarize(r.votes.map(([, v]) => v), r.deck);
+      const sum = summarize(r.votes.map(([, v]) => v), r.sizes ?? r.deck === "tshirt");
       const li = document.createElement("li");
       const det = document.createElement("details");
       det.dataset.id = r.id;
@@ -556,12 +818,13 @@
       const title = document.createElement("span");
       title.className = "h-topic";
       title.replaceChildren(r.topic ? linkify(r.topic) : "Untitled round");
+      if (r.title) title.append(" · " + r.title);
       const result = document.createElement("span");
       result.className = "h-result";
       result.textContent = (sum.consensus ? "🎉 " : "") + sum.value;
       const meta = document.createElement("span");
       meta.className = "h-meta";
-      meta.textContent = `${fmtTime(r.at)} · ${DECKS[r.deck] ? DECKS[r.deck].label : ""} · ${sum.dist}`;
+      meta.textContent = `${fmtTime(r.at)} · ${r.deckLabel || (DECKS[r.deck] ? DECKS[r.deck].label : "")} · ${sum.dist}`;
       summary.append(title, result, meta);
 
       const votes = document.createElement("ul");
@@ -589,9 +852,9 @@
 
   function historyAsText() {
     return (view.history || []).slice().reverse().map((r) => {
-      const sum = summarize(r.votes.map(([, v]) => v), r.deck);
+      const sum = summarize(r.votes.map(([, v]) => v), r.sizes ?? r.deck === "tshirt");
       const votes = r.votes.map(([n, v]) => `${n}: ${v}`).join(", ");
-      return `${r.topic || "Untitled round"} — ${sum.label}: ${sum.value} (${votes})`;
+      return `${r.topic || "Untitled round"}${r.title ? " · " + r.title : ""} — ${sum.label}: ${sum.value} (${votes})`;
     }).join("\n");
   }
 
@@ -600,7 +863,10 @@
     $("room").hidden = false;
     $("room-token").textContent = token;
     document.title = `Planning Poker · ${token}`;
-    view = { topic: "", deck: "fib", revealed: false, players: { [clientId]: { name: myName, vote: null } }, history: loadHistory() };
+    view = {
+      topic: "", deck: "fib", revealed: false, players: { [clientId]: { name: myName, vote: null } },
+      history: loadHistory(), ticket: null, linearScale: null,
+    };
     render();
     connect();
   }
@@ -652,6 +918,14 @@
     (cleanToken(location.hash.slice(1)) ? $("join-invite") : $("create")).click();
   });
   $("token-input").addEventListener("keydown", (e) => e.key === "Enter" && $("join").click());
+
+  $("ticket-more").onclick = () => {
+    ticketExpanded = !ticketExpanded;
+    renderTicket();
+  };
+  $("ticket-refresh").onclick = () => maybeFetchTicket(true);
+  // Linear connected/disconnected in this browser: try loading the ticket.
+  window.addEventListener("pp-linear-change", () => view && render());
 
   $("reveal").onclick = () => send({ type: "reveal" });
   $("reset").onclick = () => {

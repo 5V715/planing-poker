@@ -52,6 +52,45 @@
     return { name: v.name || v.displayName, org: v.organization.name, slug: v.organization.urlKey };
   }
 
+  // Ticket details + the team's estimation settings. id can be "ENG-123".
+  async function fetchIssue(id) {
+    if (!key) throw new Error("Not connected to Linear");
+    let data;
+    try {
+      data = await gql(`query ($id: String!) {
+        issue(id: $id) {
+          identifier title description url estimate
+          state { name color }
+          team { name issueEstimationType issueEstimationAllowZero issueEstimationExtended }
+        }
+      }`, { id });
+    } catch (e) {
+      if (e.kind === "auth") {
+        status = "err";
+        problem = e.message;
+        render();
+      }
+      throw new Error(/not found|Entity not found/i.test(e.message) ? "ticket not found (or no access)" : e.message);
+    }
+    const i = data.issue;
+    if (!i) throw new Error("ticket not found (or no access)");
+    return {
+      identifier: i.identifier,
+      title: i.title,
+      url: i.url,
+      description: i.description || "",
+      estimate: i.estimate,
+      stateName: i.state && i.state.name,
+      stateColor: i.state && i.state.color,
+      team: i.team && i.team.name,
+      scale: i.team && {
+        type: i.team.issueEstimationType,
+        allowZero: i.team.issueEstimationAllowZero,
+        extended: i.team.issueEstimationExtended,
+      },
+    };
+  }
+
   async function check() {
     if (!key) return;
     status = "checking";
@@ -87,7 +126,15 @@
 
   // ---------- UI ----------
 
+  let lastConnected = null;
+
   function render() {
+    // Let the rest of the app know when the connection changes.
+    const connected = status === "on";
+    if (connected !== lastConnected) {
+      lastConnected = connected;
+      window.dispatchEvent(new CustomEvent("pp-linear-change"));
+    }
     const btn = $("linear-btn");
     btn.classList.remove("off", "on", "err", "busy");
     let label;
@@ -269,6 +316,7 @@
     get connected() { return status === "on"; },
     get viewer() { return viewer; },
     request: (query, variables) => gql(query, variables),
+    fetchIssue,
   };
 
   render();

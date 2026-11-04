@@ -66,6 +66,19 @@
         placeholder="What are we estimating? Paste a ticket link…">
       <div id="topic-view" class="topic topic-view" role="button" tabindex="0" title="Tap to edit" hidden></div>
 
+      <p id="ticket-note" class="ticket-note" hidden></p>
+      <article id="ticket" class="ticket" hidden>
+        <div class="ticket-head">
+          <a id="ticket-id" class="ticket-id" target="_blank" rel="noopener noreferrer"></a>
+          <span class="ticket-state"><span id="ticket-state-dot" class="ticket-dot"></span><span id="ticket-state"></span></span>
+          <button id="ticket-refresh" class="ticket-refresh" type="button" title="Reload from Linear" aria-label="Reload from Linear">↻</button>
+        </div>
+        <h2 id="ticket-title" class="ticket-title"></h2>
+        <div id="ticket-meta" class="ticket-meta"></div>
+        <div id="ticket-desc" class="ticket-desc md"></div>
+        <button id="ticket-more" class="link-btn" type="button" hidden>Show more</button>
+      </article>
+
       <ul id="players" class="players"></ul>
 
       <div id="results" class="results" hidden></div>
@@ -135,6 +148,8 @@
   </div>
 
   <script src="vendor/peerjs.min.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
   <script src="app.js"></script>
   <script src="linear.js"></script>
 </body>

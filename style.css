@@ -257,3 +257,40 @@ a.button[aria-disabled="true"] { opacity: .5; pointer-events: none; }
 .ok-box .avatar { width: 38px; height: 38px; flex: none; border-radius: 50%; background: #5e6ad2; color: #fff; display: grid; place-items: center; font-weight: 700; }
 button.danger { color: var(--error); border-color: var(--error); background: transparent; }
 .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- Ticket from Linear ---------- */
+.ticket-note { font-size: 13px; color: var(--muted); margin: -8px 0 12px; }
+.ticket {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; margin: -4px 0 16px;
+}
+.ticket-head { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.ticket-id { font-weight: 700; font-family: ui-monospace, Menlo, monospace; text-decoration: none; }
+.ticket-state { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.ticket-dot { width: 9px; height: 9px; border-radius: 50%; }
+.ticket-refresh { margin-left: auto; border: none; background: none; color: var(--muted); font-size: 18px; padding: 2px 6px; }
+.ticket-title { margin: 6px 0 2px; font-size: 18px; font-weight: 700; line-height: 1.3; }
+.ticket-meta { font-size: 12px; color: var(--muted); }
+.ticket-desc { margin-top: 10px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.ticket-desc.collapsed { max-height: 180px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.link-btn { border: none; background: none; color: var(--accent); padding: 6px 0 0; font-size: 14px; }
+
+/* Markdown */
+.md > div > :first-child { margin-top: 0; }
+.md > div > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 15px; margin: 14px 0 6px; }
+.md h1 { font-size: 17px; } .md h2 { font-size: 16px; }
+.md p { margin: 0 0 8px; }
+.md ul, .md ol { margin: 0 0 8px; padding-left: 22px; }
+.md li { margin: 2px 0; }
+.md li:has(> input[type="checkbox"]) { list-style: none; margin-left: -20px; }
+.md input[type="checkbox"] { width: auto; margin: 0 6px 0 0; vertical-align: -1px; }
+.md code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.md pre { background: var(--bg); padding: 10px; border-radius: 8px; overflow-x: auto; }
+.md pre code { padding: 0; background: none; }
+.md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; margin-bottom: 8px; }
+.md th, .md td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+.md hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.md .plain, .md > .plain { white-space: pre-wrap; }

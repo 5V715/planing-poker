@@ -1,0 +1,11 @@
+{
+  "name": "planning-poker-signaling",
+  "private": true,
+  "description": "PeerJS signaling server for Planning Poker, meant to run behind `tailscale serve`.",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "peer": "1.0.2"
+  }
+}

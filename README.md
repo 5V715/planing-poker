@@ -14,9 +14,34 @@ The session token maps to a fixed peer ID: the first person in the session claim
 room state; everyone else connects to them. If that person leaves, the others automatically take
 over and keep going (topic and votes carry over).
 
-PeerJS's free public server is used only to introduce browsers to each other. To use your own
-[PeerServer](https://github.com/peers/peerjs-server), add query params:
-`?peerhost=peer.example.com&peerport=443&peerpath=/`.
+Browsers need a small *signaling* server only to find each other. By default that's PeerJS's
+free public server; on a Tailscale network you can run your own (below) so nothing leaves the tailnet
+for signaling.
+
+## Private signaling on your tailnet
+
+On any always-on machine in the tailnet (Node 18+):
+
+```sh
+cd server
+npm install
+npm start                    # listens on 127.0.0.1:9000 only
+tailscale serve --bg 9000    # HTTPS on https://<machine>.<tailnet>.ts.net
+```
+
+`tailscale serve` needs HTTPS certificates turned on for the tailnet (admin console → DNS → HTTPS).
+Then set the host in `config.js` and push to `main`:
+
+```js
+signaling: { host: "<machine>.<tailnet>.ts.net", port: 443, path: "/", secure: true }
+```
+
+Notes:
+- Only people on the tailnet can join; anyone else sees "Can't reach … — retrying…".
+- Chrome may ask once to allow the page to access devices on your local network. Click **Allow**.
+- To keep the server running after reboots, use a systemd service, `pm2`, or similar.
+- You can try a server without changing `config.js` by adding
+  `?peerhost=<host>&peerport=443&peerpath=/` to the page URL. Invite links keep these params.
 
 ## Deploying
 

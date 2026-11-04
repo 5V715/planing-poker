@@ -21,14 +21,21 @@
     store.set("pp-client-id", clientId);
   }
 
-  // Optional self-hosted PeerJS server: ?peerhost=example.com&peerport=443&peerpath=/
+  // Signaling server: config.js (e.g. your tailnet) or, for testing, URL params
+  // ?peerhost=example.com&peerport=443&peerpath=/&peersecure=0
   const params = new URLSearchParams(location.search);
+  const cfg = (window.PP_CONFIG && window.PP_CONFIG.signaling) || null;
   const peerOptions = { debug: 0 };
   if (params.get("peerhost")) {
     peerOptions.host = params.get("peerhost");
     peerOptions.port = Number(params.get("peerport") || 443);
     peerOptions.path = params.get("peerpath") || "/";
     peerOptions.secure = params.get("peersecure") !== "0";
+  } else if (cfg && cfg.host) {
+    peerOptions.host = cfg.host;
+    peerOptions.port = Number(cfg.port || 443);
+    peerOptions.path = cfg.path || "/";
+    peerOptions.secure = cfg.secure !== false;
   }
 
   let token = null;
@@ -140,6 +147,12 @@
     console.warn("PeerJS error:", err.type, err);
     if (err.type === "browser-incompatible") {
       setStatus("Browser not supported", "warn");
+      return;
+    }
+    if (err.type === "network" || err.type === "server-error" || err.type === "socket-error") {
+      // Usually: not on the tailnet, or the signaling server is down.
+      scheduleRetry(3000 + Math.random() * 2000,
+        peerOptions.host ? `Can't reach ${peerOptions.host} — retrying…` : "Can't reach server — retrying…");
       return;
     }
     // peer-unavailable: the host left between our ID check and connect, etc.

@@ -294,3 +294,6 @@ button.danger { color: var(--error); border-color: var(--error); background: tra
 .md th, .md td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
 .md hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .md .plain, .md > .plain { white-space: pre-wrap; }
+
+/* Start screen: center the title above the card */
+body:has(#landing:not([hidden])) .topbar { justify-content: center; }
